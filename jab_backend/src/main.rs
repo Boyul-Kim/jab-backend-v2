@@ -4,6 +4,7 @@ use std::{
     net::{TcpListener, TcpStream}, 
     thread,
 };
+use jab_backend::ThreadPool;
 
 fn main() {
     //unwrap to terminate program if stream has any errors
