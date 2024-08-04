@@ -1,45 +1,55 @@
-use jab_backend::ThreadPool;
-use std::{
-    fs,
-    io::{prelude::*, BufReader},
-    net::{TcpListener, TcpStream},
-    thread,
-    time::Duration,
+use axum::{
+    body::Body,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{get, post},
+    Json, Router,
 };
+use serde::Serialize;
 
-fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-    let pool = ThreadPool::new(4);
-
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
-
-        pool.execute(|| {
-            handle_connection(stream);
-        });
-    }
-
-    println!("Shutting down.");
+#[derive(Serialize)]
+struct User {
+    id: u64,
+    name: String,
+    email: String,
 }
 
-fn handle_connection(mut stream: TcpStream) {
-    let buf_reader = BufReader::new(&mut stream);
-    let request_line = buf_reader.lines().next().unwrap().unwrap();
+// Handler for /create-user
+async fn create_user() -> impl IntoResponse {
+    Response::builder()
+        .status(StatusCode::CREATED)
+        .body(Body::from("User created successfully"))
+        .unwrap()
+}
+// Handler for /users
+async fn list_users() -> Json<Vec<User>> {
+    let users = vec![
+        User {
+            id: 1,
+            name: "Elijah".to_string(),
+            email: "elijah@example.com".to_string(),
+        },
+        User {
+            id: 2,
+            name: "John".to_string(),
+            email: "john@doe.com".to_string(),
+        },
+    ];
+    Json(users)
+}
 
-    let (status_line, filename) = match &request_line[..] {
-        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
-        "GET /sleep HTTP/1.1" => {
-            thread::sleep(Duration::from_secs(5));
-            ("HTTP/1.1 200 OK", "hello.html")
-        }
-        _ => ("HTTP/1.1 404 NOT FOUND", "404.html"),
-    };
+#[tokio::main]
+async fn main() {
+    // Define Routes
+    let app = Router::new()
+        .route("/", get(|| async { "Hello, Rust!" }))
+        .route("/create-user", post(create_user))
+        .route("/users", get(list_users));
 
-    let contents = fs::read_to_string(filename).unwrap();
-    let length = contents.len();
-
-    let response =
-        format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
-
-    stream.write_all(response.as_bytes()).unwrap();
+    println!("Running on http://localhost:3000");
+    // Start Server
+    axum::Server::bind(&"127.0.0.1:3000".parse().unwrap())
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }
